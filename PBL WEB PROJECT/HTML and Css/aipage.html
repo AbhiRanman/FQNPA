@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+    <title>FQNPA AI</title>
+    <link rel="stylesheet" href="aipage.css">
+    <link rel="stylesheet" href="nav.css">
+</head>
+<body>
+    <div class="title">
+        <h1>Food Quality AI Projects</h1>
+    </div>
+    <br><br>
+    <nav class="navbar">
+        <ul>
+            <li><a href="Index.html">Home</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="aipage.html">Applications</a></li>
+            <li><a href="details.html">Nutrition</a></li>
+            <li><a href="GMO.html">GMOs</a></li>
+            <li><a href="harmfulchem.html">Harmful Chemicals</a></li>
+            <li><a href="info.html">Contact Information</a></li>
+            <li><a href="extra.html">Fun projects</a></li>
+        </ul>
+    </nav>
+
+    <div id="webcam-container">
+        <h1>Webcam OCR with Tesseract.js</h1>
+        <video id="webcam" autoplay></video>
+        <br>
+        <button onclick="startWebcam()">Start Webcam</button>
+        <button onclick="captureAndAnalyze()">Capture & Analyze Text</button>
+    </div>
+
+    <div id="ocr-result"></div>
+
+    <!-- Dropdown Menu for Material Selection -->
+    <div id="material-select-container">
+        <label for="material-select">Select Material (if not detected):</label>
+        <select id="material-select">
+            <option value="">-- Select --</option>
+            <option value="sugar">Sugar</option>
+            <option value="protein">Protein</option>
+            <option value="carbohydrates">Carbohydrates</option>
+            <option value="fat">Fat</option>
+            <option value="saturatedFat">Saturated Fat</option>
+            <option value="transFat">Trans Fat</option>
+            <option value="cholesterol">Cholesterol</option>
+        </select>
+    </div>
+
+    <!-- Dynamic Text Box for Material Summary -->
+    <div id="material-summary-container" style="display:none;">
+        <label for="material-summary">Material Summary:</label>
+        <textarea id="material-summary" rows="4" cols="50" readonly></textarea>
+    </div>
+
+    <!-- Information about the analysis in a text box -->
+    <div id="analysis-info-container">
+        <label for="analysis-info">Analysis Info:</label>
+        <textarea id="analysis-info" rows="4" cols="50" readonly></textarea>
+    </div>
+
+    <!-- Tesseract.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.3/dist/tesseract.min.js"></script>
+
+    <script>
+        let videoElement = document.getElementById('webcam');
+        let canvas = document.createElement('canvas');
+        let context = canvas.getContext('2d');
+        
+        let detectedIngredients = {};
+    
+        function startWebcam() {
+            updateAnalysisInfo("Accessing webcam...");
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    videoElement.srcObject = stream;
+                    updateAnalysisInfo("Webcam started. Ready to capture.");
+                })
+                .catch(error => {
+                    console.error('Error accessing the webcam:', error);
+                    updateAnalysisInfo("Error accessing the webcam.");
+                });
+        }
+    
+        function updateAnalysisInfo(message) {
+            document.getElementById('analysis-info').value = message;
+        }
+    
+        function preprocessImage(canvas) {
+            let context = canvas.getContext('2d');
+            let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imageData.data;
+    
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+                let gray = (r + g + b) / 3;
+                data[i] = data[i + 1] = data[i + 2] = gray;
+            }
+    
+            context.putImageData(imageData, 0, 0);
+        }
+    
+        function capture() {
+            updateAnalysisInfo("Capturing image from webcam...");
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            preprocessImage(canvas);
+    
+            Tesseract.recognize(
+                canvas.toDataURL('image/png'),
+                'eng',
+                {
+                    logger: (m) => console.log(m),
+                    tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                    psm: 6,
+                    oem: 1
+                }
+            ).then(({ data: { text } }) => {
+                updateAnalysisInfo("OCR completed. Displaying results...");
+                checkForIngredients(text);
+            }).catch((error) => {
+                updateAnalysisInfo("Error during OCR: " + error.message);
+                document.getElementById('ocr-result').innerHTML = 'Error during OCR: ' + error.message;
+                console.error('Error during OCR:', error);
+            });
+        }
+    
+        function checkForIngredients(text) {
+            const ingredients = {
+                sugar: /SUGAR|Svg|Sug|Sg|gar|SUJ/i,
+                protein: /PROTEIN|prot|pro|rot|ein/i,
+                carbohydrates: /CARBOHYDRATES|CARBS|Carb|Cav|Car|C avbs|Corbs|rbs|vbs|arb|CAY/i,
+                fat: /FAT|F@t|Fa|at|Ft/i,
+                saturatedFat: /SATURATEDFAT|Satur|Safvrated|Safv|rated|Sat|vated|Saf|Ura/i,
+                transFat: /TRANSFAT|Trans|Tvraus|Traus|Tva|rans|Trams|Trans Fat|TVR|Tra|vaus/i,
+                cholesterol: /CHOLESTROL|CHO|les|lest|tro|orl|Cholestvel/i
+            };
+    
+            const links = {
+                sugar: 'https://www.fda.gov/food/nutrition-facts-label/added-sugars-nutrition-facts-label',
+                protein: 'https://www.ncbi.nlm.nih.gov/books/NBK555990/',
+                carbohydrates: 'https://medlineplus.gov/carbohydrates.html#:~:text=Carbohydrates%2C%20or%20carbs%2C%20are%20sugar,cells%2C%20tissues%2C%20and%20organs.',
+                fat: 'https://medlineplus.gov/ency/patientinstructions/000104.htm',
+                saturatedFat: 'https://pubmed.ncbi.nlm.nih.gov/34649831/',
+                transFat: 'https://medlineplus.gov/ency/patientinstructions/000786.htm',
+                cholesterol: 'https://medlineplus.gov/cholesterol.html'
+            };
+    
+            let resultText = `Recognized Text: <br><br>${text.replace(/\n/g, "<br>")}<br><br>`;
+            let foundIngredients = [];
+            let notDetectedIngredients = [];
+    
+            for (let ingredient in ingredients) {
+                if (ingredients[ingredient].test(text)) {
+                    const label = ingredient.charAt(0).toUpperCase() + ingredient.slice(1);
+                    const href = links[ingredient];
+                    foundIngredients.push(`The word "<a href="${href}" target="_blank">${label}</a>" was detected.`);
+                    detectedIngredients[ingredient] = true;
+                } else {
+                    notDetectedIngredients.push(`The word "${ingredient.charAt(0).toUpperCase() + ingredient.slice(1)}" was NOT detected.`);
+                    detectedIngredients[ingredient] = false;
+                }
+            }
+    
+            let finalResult = resultText + foundIngredients.join("<br>") + "<br>" + notDetectedIngredients.join("<br>");
+            document.getElementById('ocr-result').innerHTML = finalResult;
+            updateDropdown();
+        }
+    
+        function updateDropdown() {
+            let select = document.getElementById('material-select');
+            select.innerHTML = '<option value="">-- Select --</option>';
+    
+            for (let ingredient in detectedIngredients) {
+                if (!detectedIngredients[ingredient]) {
+                    let option = document.createElement('option');
+                    option.value = ingredient;
+                    option.textContent = ingredient.charAt(0).toUpperCase() + ingredient.slice(1);
+                    select.appendChild(option);
+                }
+            }
+    
+            select.addEventListener('change', (e) => {
+                let selectedIngredient = e.target.value;
+                if (selectedIngredient) {
+                    showMaterialSummary(selectedIngredient);
+                } else {
+                    document.getElementById('material-summary-container').style.display = "none";
+                }
+            });
+        }
+    
+        function showMaterialSummary(ingredient) {
+            let summaries = {
+                sugar: "Sugar is a carbohydrate that provides energy. It's found naturally in fruits and dairy products, but also added to processed foods.",
+                protein: "Proteins are the building blocks of life. They are essential for muscle repair, immune function, and various bodily processes.",
+                carbohydrates: "Carbohydrates are the body's primary energy source. They are found in foods like bread, rice, and pasta.",
+                fat: "Fats are essential for energy and cell function. They can be found in both animal and plant-based foods.",
+                saturatedFat: "Saturated fats are typically found in animal products and can raise cholesterol levels if consumed in excess.",
+                transFat: "Trans fats are artificially created fats that are harmful to heart health and should be avoided.",
+                cholesterol: "Cholesterol is a fatty substance found in the blood. It's needed for building cells, but too much can cause heart disease."
+            };
+    
+            let summaryText = summaries[ingredient] || "No summary available.";
+            document.getElementById('material-summary').value = summaryText;
+            document.getElementById('material-summary-container').style.display = "block";
+        }
+    
+        function captureAndAnalyze() {
+            capture();
+        }
+    </script>
+    
+    
+</body>
+</html>
